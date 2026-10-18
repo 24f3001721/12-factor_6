@@ -104,7 +104,7 @@ def effective_config(query_params):
         config[key] = coerce(key, config[key])
 
     # Mask secret
-    config["api_key"] = "***"
+    config["api_key"] = "****"
 
     return config
 

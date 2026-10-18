@@ -79,7 +79,10 @@ def effective_config(query_params):
 
     # Convert values to their required types.
     for key in ("port", "workers", "debug", "log_level", "api_key"):
-        config[key] = coerce(key, config[key])
+        if key in query_params:
+            config[key] = query_params[key]
+        elif f"set-{key}" in query_params:
+            config[key] = query_params[f"set-{key}"]
 
     # Never expose the actual secret.
     config["api_key"] = "***"

@@ -44,8 +44,16 @@ def as_bool(value):
 def coerce(key, value):
     if key in ("port", "workers"):
         return int(value)
+
     if key == "debug":
-        return as_bool(value)
+        if isinstance(value, bool):
+            return value
+        if str(value).strip().lower() in ("true", "1", "yes", "on"):
+            return True
+        if str(value).strip().lower() in ("false", "0", "no", "off"):
+            return False
+        raise ValueError(f"Invalid boolean value: {value}")
+
     return str(value)
 
 
@@ -81,7 +89,7 @@ def effective_config(query_params):
     for key in ("port", "workers", "debug", "log_level", "api_key"):
         if key in query_params:
             config[key] = query_params[key]
-        elif f"set-{key}" in query_params:
+        if f"set-{key}" in query_params:
             config[key] = query_params[f"set-{key}"]
 
     # Never expose the actual secret.

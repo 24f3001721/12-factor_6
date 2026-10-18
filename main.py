@@ -9,12 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Load .env without overriding existing OS environment variables
+# Load .env without overriding OS environment variables
 load_dotenv(BASE_DIR / ".env", override=False)
 
 app = FastAPI()
 
-# Allow requests from the assignment page
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,7 +34,6 @@ CONFIG_KEYS = ("port", "workers", "debug", "log_level", "api_key")
 
 
 def coerce(key, value):
-    """Convert each configuration value to its required type."""
     if key in ("port", "workers"):
         return int(value)
 
@@ -56,7 +54,6 @@ def coerce(key, value):
 
 
 def read_yaml():
-    """Read environment-specific YAML configuration."""
     path = BASE_DIR / "config.development.yaml"
 
     if not path.exists():
@@ -67,43 +64,46 @@ def read_yaml():
 
 
 def effective_config(query_params):
-    # Layer 1: hardcoded defaults
+    # Layer 1: defaults
     config = DEFAULTS.copy()
 
-    # Layer 2: environment-specific YAML
-    yaml_config = read_yaml()
-    config.update(yaml_config)
+    # Layer 2: YAML
+    config.update(read_yaml())
 
-    # Layer 3: .env / environment variables
-    # load_dotenv() has already loaded .env values.
+    # Layer 3: environment variables
     for key in CONFIG_KEYS:
         env_key = f"APP_{key.upper()}"
-
         if env_key in os.environ:
             config[key] = os.environ[env_key]
 
-    # Special alias for workers
+    # NUM_WORKERS alias
     if "NUM_WORKERS" in os.environ:
         config["workers"] = os.environ["NUM_WORKERS"]
 
     # Layer 4: query parameters (highest precedence)
-    for key in CONFIG_KEYS:
-        direct_key = key
-        prefixed_key = f"set-{key}"
+    for param, value in query_params.multi_items():
+        if param == "set":
+            # Supports repeated parameters: ?set=workers=16&set=port=8195
+            if "=" in value:
+                key, override_value = value.split("=", 1)
+                if key in CONFIG_KEYS:
+                    config[key] = override_value
 
-        # Apply the direct query parameter first
-        if direct_key in query_params:
-            config[key] = query_params[direct_key]
+        elif param.startswith("set-"):
+            # Supports ?set-workers=16
+            key = param[4:]
+            if key in CONFIG_KEYS:
+                config[key] = value
 
-        # The set- form also works and takes precedence if both exist
-        if prefixed_key in query_params:
-            config[key] = query_params[prefixed_key]
+        elif param in CONFIG_KEYS:
+            # Supports ?workers=16
+            config[param] = value
 
-    # Convert types only after all layers are merged
+    # Convert types after merging all layers
     for key in CONFIG_KEYS:
         config[key] = coerce(key, config[key])
 
-    # Never expose the actual API key
+    # Mask secret
     config["api_key"] = "***"
 
     return config
